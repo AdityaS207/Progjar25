@@ -15,9 +15,10 @@ def main():
                 print("Perintah tidak dikenali.")
                 continue
 
-            s.sendall((command + "\r\n").encode('utf-8'))
-
-            if command == "QUIT":
+            if command == "TIME":
+                s.sendall(b"TIME\r\n")
+            elif command == "QUIT":
+                s.sendall(b"QUIT\r\n")
                 print("Menutup koneksi.")
                 break
 
