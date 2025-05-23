@@ -2,16 +2,28 @@ import subprocess
 import time
 import os
 import csv
-from client_stress_test import stress_test
+from file_client_cli import stress_test
 
 # Konfigurasi
 OPERATIONS = ['list', 'upload', 'download']
 VOLUMES = ['test_files/test_10mb.bin', 'test_files/test_50mb.bin', 'test_files/test_100mb.bin']
 CLIENT_WORKERS = [1, 5, 50]
 SERVER_WORKERS = [1, 5, 50]
-POOL_TYPES = ['thread', 'process']
+POOL_TYPES = ['thread']
 
 results = []
+
+def wait_for_server(timeout=10):
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            sock = socket.socket()
+            sock.connect(('127.0.0.1', 6669))
+            sock.close()
+            return True
+        except:
+            time.sleep(0.2)
+    return False
 
 def run_server(pool_type, workers):
     print(f"[+] Starting server with {pool_type} pool, {workers} workers")
@@ -28,9 +40,10 @@ def stop_server(proc):
 row_num = 1
 for pool_type in POOL_TYPES:
     for sw in SERVER_WORKERS:
-        # Jalankan server
         server_proc = run_server(pool_type, sw)
-        time.sleep(2)  # Tunggu server siap
+        if not wait_for_server():
+            print("[-] Gagal menunggu server")
+            continue
 
         for op in OPERATIONS:
             for vol in VOLUMES:
@@ -56,7 +69,6 @@ for pool_type in POOL_TYPES:
 
         stop_server(server_proc)
 
-# Simpan hasil
 keys = results[0].keys()
 with open('results.csv', 'w', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=keys)

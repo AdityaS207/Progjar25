@@ -2,18 +2,30 @@ import socket
 import os
 import json
 import base64
+import time
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 SERVER_ADDRESS = ('0.0.0.0', 6669)
-BUFFER_SIZE = 4096
+BUFFER_SIZE = 65536
 FILES_DIR = 'test_files'
 
 if not os.path.exists(FILES_DIR):
     os.makedirs(FILES_DIR)
 
+_file_cache = []
+_cache_time = 0
+CACHE_TTL = 2
+
+def get_cached_files():
+    global _file_cache, _cache_time
+    if time.time() - _cache_time > CACHE_TTL:
+        _file_cache = [f for f in os.listdir(FILES_DIR) if os.path.isfile(os.path.join(FILES_DIR, f))]
+        _cache_time = time.time()
+    return _file_cache
+
 def process_request(request):
     if request == "LIST":
-        files = [f for f in os.listdir(FILES_DIR) if os.path.isfile(os.path.join(FILES_DIR, f))]
+        files = get_cached_files()
         return json.dumps({'status': 'OK', 'data': files}) + "\r\n\r\n"
 
     elif request.startswith("UPLOAD "):
@@ -55,16 +67,16 @@ def process_request(request):
 
 def handle_client(conn, addr):
     try:
-        data_received = ""
+        data_received = b''
         while True:
             data = conn.recv(BUFFER_SIZE)
             if not data:
                 break
-            data_received += data.decode()
-            if "\r\n\r\n" in data_received:
+            data_received += data
+            if b"\r\n\r\n" in data_received:
                 break
 
-        request = data_received.strip().replace("\r\n\r\n", "")
+        request = data_received.strip().replace(b"\r\n\r\n", b"").decode()
         response = process_request(request)
         conn.sendall(response.encode())
     except Exception as e:

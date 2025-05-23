@@ -1,7 +1,8 @@
 import socket
 import json
 import base64
-import logging
+import time
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 server_address = ('127.0.0.1', 6669)
@@ -13,20 +14,19 @@ def send_command(command_str=""):
         sock.connect(server_address)
         sock.sendall((command_str + "\r\n\r\n").encode())
 
-        data_received = ""
+        data_received = b''
         while True:
-            data = sock.recv(4096)
+            data = sock.recv(65536)
             if data:
-                data_received += data.decode()
-                if "\r\n\r\n" in data_received:
+                data_received += data
+                if b"\r\n\r\n" in data_received:
                     break
             else:
                 break
 
-        hasil = json.loads(data_received.strip())
+        hasil = json.loads(data_received.strip().decode())
         return hasil
     except Exception as e:
-        logging.warning(f"Error: {e}")
         return {'status': 'ERROR', 'data': str(e)}
     finally:
         sock.close()
@@ -34,10 +34,19 @@ def send_command(command_str=""):
 def remote_list():
     return send_command("LIST")
 
+def chunked_base64_encode(file_path, chunk_size=64*1024):
+    encoded = ''
+    with open(file_path, 'rb') as f:
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                break
+            encoded += base64.b64encode(chunk).decode('utf-8')
+    return encoded
+
 def remote_upload(filename=""):
     try:
-        with open(filename, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode()
+        encoded = chunked_base64_encode(filename)
         command_str = f"UPLOAD {filename}|||{encoded}"
         return send_command(command_str)
     except Exception as e:
@@ -66,7 +75,8 @@ def stress_test(operation="list", filename=None, workers=5):
         return result['status'], end_time - start_time
 
     results = []
-    with ThreadPoolExecutor(max_workers=workers) as executor:
+    max_workers = min(workers, 50)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(task) for _ in range(workers)]
         for future in futures:
             results.append(future.result())
