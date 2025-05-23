@@ -2,6 +2,7 @@ import subprocess
 import time
 import os
 import csv
+import socket  # <-- Added
 from file_client_cli import stress_test
 
 # Konfigurasi
@@ -28,7 +29,7 @@ def wait_for_server(timeout=10):
 def run_server(pool_type, workers):
     print(f"[+] Starting server with {pool_type} pool, {workers} workers")
     return subprocess.Popen(
-        ["python3", "server.py", "--type", pool_type, "--workers", str(workers)],
+        ["python3", "file_server.py", "--type", pool_type, "--workers", str(workers)],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
 
@@ -43,11 +44,16 @@ for pool_type in POOL_TYPES:
         server_proc = run_server(pool_type, sw)
         if not wait_for_server():
             print("[-] Gagal menunggu server")
+            stop_server(server_proc)
             continue
 
         for op in OPERATIONS:
             for vol in VOLUMES:
                 for cw in CLIENT_WORKERS:
+                    if op != "list" and not os.path.exists(vol):
+                        print(f"[-] File tidak ditemukan: {vol}")
+                        continue
+
                     print(f"[{row_num}] Testing: {op}, {vol}, Client={cw}, Server={sw}, Pool={pool_type}")
                     res = stress_test(op, filename=vol, workers=cw)
 
@@ -69,10 +75,13 @@ for pool_type in POOL_TYPES:
 
         stop_server(server_proc)
 
-keys = results[0].keys()
-with open('results.csv', 'w', newline='') as f:
-    writer = csv.DictWriter(f, fieldnames=keys)
-    writer.writeheader()
-    writer.writerows(results)
-
-print("✅ Semua uji selesai. Hasil disimpan di 'results.csv'")
+# ✅ Only write if results are available
+if results:
+    keys = results[0].keys()
+    with open('results.csv', 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        writer.writerows(results)
+    print("✅ Semua uji selesai. Hasil disimpan di 'results.csv'")
+else:
+    print("⚠️ Tidak ada hasil yang bisa ditulis. Pastikan server berjalan dan file uji ada.")

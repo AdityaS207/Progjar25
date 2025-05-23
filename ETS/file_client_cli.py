@@ -56,7 +56,7 @@ def remote_download(filename=""):
     hasil = send_command(f"DOWNLOAD {filename}")
     if hasil['status'] == 'OK':
         try:
-            base64.b64decode(hasil['data'])  # Simpan atau abaikan
+            base64.b64decode(hasil['data'])
         except Exception as e:
             return {'status': 'ERROR', 'data': str(e)}
     return hasil
